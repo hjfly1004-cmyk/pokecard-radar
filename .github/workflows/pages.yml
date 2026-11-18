@@ -1,0 +1,50 @@
+# 매일 아침 시세·뉴스·신규 세트를 모아서 GitHub Pages에 배포
+name: 시세 수집 & 배포
+
+on:
+  schedule:
+    - cron: '0 21 * * *'   # 매일 06:00 (한국 시간)
+  workflow_dispatch:         # Actions 탭에서 "Run workflow"로 바로 갱신
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # 제품 정보·세트 코드 등 오래 쓰는 캐시는 다음 실행 때 재사용
+      - uses: actions/cache@v4
+        with:
+          path: cache
+          key: pokecard-cache-${{ github.run_id }}
+          restore-keys: pokecard-cache-
+      - name: 데이터 수집
+        run: node scripts/collect.js
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

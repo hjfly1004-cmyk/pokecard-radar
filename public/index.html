@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>포켓카드 레이더</title>
+<meta name="theme-color" content="#e3350d">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><img src="icon.svg" alt=""><span>포켓카드 레이더</span></div>
+  <button id="bellBtn" class="icon-btn" title="알림 설정" aria-label="알림 설정">🔔<span id="bellDot" class="dot" hidden></span></button>
+</header>
+
+<main>
+  <!-- 시세 -->
+  <section id="tab-price" class="tab active">
+    <form id="searchForm" class="search">
+      <input id="q" type="search" placeholder="카드 이름 (예: 리자몽 ex, 피카츄, 뮤츠)" autocomplete="off" enterkeyhint="search">
+      <button type="submit" class="primary">검색</button>
+    </form>
+    <div class="chip-row"><span class="chip-label">🔥 세트별 힛카드</span><div class="chips" id="hitChips"></div></div>
+    <div class="chip-row" id="historyRow" hidden><span class="chip-label">🕘 최근 검색</span><div class="chips" id="historyChips"></div></div>
+    <div id="krBox"></div>
+    <h3 class="sub" id="watchTitle">⭐ 관심 카드 <small>(가격 변동 시 알림)</small></h3>
+    <div id="watchList" class="grid"></div>
+    <details id="globalBox" class="globalbox" hidden>
+      <summary>🌏 해외 상세 시세 보기 <small>(TCGplayer·Cardmarket 원본 데이터)</small></summary>
+      <div class="row-between">
+        <p class="hint" id="priceHint">TCGplayer(미국)·Cardmarket(유럽) 시세를 원화로 환산합니다.</p>
+        <select id="sortSel" aria-label="정렬">
+          <option value="price">가격 높은순</option>
+          <option value="priceAsc">가격 낮은순</option>
+          <option value="new">최신 세트순</option>
+        </select>
+      </div>
+      <h3 class="sub" id="resultTitle" hidden>검색 결과</h3>
+      <div id="results" class="grid"></div>
+    </details>
+  </section>
+
+  <!-- 이벤트 -->
+  <section id="tab-events" class="tab">
+    <div class="row-between">
+      <h2>이벤트 · 대회 소식</h2>
+      <button class="ghost" data-refresh="events">새로고침</button>
+    </div>
+    <div class="chips" id="eventFilters"></div>
+    <p class="hint">Google 뉴스에서 실시간으로 모아요. 새 소식이 올라오면 알림을 보냅니다.</p>
+    <div class="links">
+      <a href="https://pokemoncard.co.kr/event" target="_blank" rel="noopener">공식 이벤트 페이지</a>
+      <a href="https://pokemoncard.co.kr/news" target="_blank" rel="noopener">공식 공지사항</a>
+    </div>
+    <ul id="eventList" class="feed"></ul>
+  </section>
+
+  <!-- 신규 카드 -->
+  <section id="tab-new" class="tab">
+    <div class="row-between">
+      <h2>새로 나온 세트</h2>
+      <button class="ghost" data-refresh="new">새로고침</button>
+    </div>
+    <div class="row-between">
+      <h3 class="sub">🇰🇷 한국 정식 발매 <small>(포켓몬 카드 게임 공식 사이트)</small></h3>
+      <label class="hint"><input type="checkbox" id="showGoods"> 굿즈도 보기</label>
+    </div>
+    <div id="krNewList" class="prodgrid"></div>
+    <h3 class="sub">🌏 글로벌 최신 확장팩</h3>
+    <div id="setList" class="sets"></div>
+    <h3 class="sub" id="setCardsTitle" hidden></h3>
+    <div id="setCards" class="grid"></div>
+  </section>
+
+  <!-- 카드샵 -->
+  <section id="tab-shops" class="tab">
+    <form id="placeForm" class="search">
+      <input id="placeQ" type="search" placeholder="지역 검색 (예: 홍대입구, 부산 서면)">
+      <button type="submit" class="primary">검색</button>
+      <button type="button" id="myLocBtn" class="ghost" title="내 위치">📍</button>
+    </form>
+    <div class="row-between">
+      <select id="radiusSel" aria-label="반경">
+        <option value="1500">반경 1.5km</option>
+        <option value="3000" selected>반경 3km</option>
+        <option value="7000">반경 7km</option>
+        <option value="15000">반경 15km</option>
+      </select>
+      <div class="links" id="mapLinks"></div>
+    </div>
+    <div id="map"></div>
+    <p class="hint" id="shopHint">위치를 정하면 주변 카드샵·하비샵을 찾아요.</p>
+    <ul id="shopList" class="feed"></ul>
+  </section>
+</main>
+
+<nav class="tabbar">
+  <button data-tab="price" class="active"><span>💰</span>시세</button>
+  <button data-tab="events"><span>🎉</span>이벤트<i class="badge" id="badge-events" hidden></i></button>
+  <button data-tab="new"><span>✨</span>신규카드<i class="badge" id="badge-new" hidden></i></button>
+  <button data-tab="shops"><span>🗺️</span>카드샵</button>
+</nav>
+
+<!-- 카드 상세 -->
+<dialog id="cardDlg"><div id="cardDlgBody"></div></dialog>
+
+<!-- 알림 설정 -->
+<dialog id="settingsDlg">
+  <form method="dialog" class="settings">
+    <h2>⚙️ 설정</h2>
+    <p class="hint" id="permState"></p>
+    <button type="button" id="permBtn" class="primary">브라우저 알림 허용</button>
+    <label><input type="checkbox" id="optEvents"> 이벤트·대회 새 소식</label>
+    <label><input type="checkbox" id="optNew"> 신규 카드·확장팩 발매</label>
+    <label><input type="checkbox" id="optPrice"> 관심 카드 가격 변동</label>
+    <label>가격 변동 기준 <select id="optPct"><option value="3">3%</option><option value="5">5%</option><option value="10">10%</option><option value="20">20%</option></select></label>
+    <label>대표 시세 기준 <select id="optBasis"><option value="median">최근 거래 중앙값</option><option value="p75">상태 좋은 카드 기준 (상위 25%)</option><option value="high">최근 최고가</option></select></label>
+    <label>확인 주기 <select id="optInterval"><option value="5">5분</option><option value="10">10분</option><option value="30">30분</option><option value="60">1시간</option></select></label>
+    <p class="hint">※ 이 앱 탭이 열려 있는 동안(백그라운드 포함) 주기적으로 확인합니다.</p>
+    <div class="row-between"><button type="button" id="testNotify" class="ghost">테스트 알림</button><button class="primary">닫기</button></div>
+  </form>
+</dialog>
+
+<div id="toasts"></div>
+<script src="shared.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
