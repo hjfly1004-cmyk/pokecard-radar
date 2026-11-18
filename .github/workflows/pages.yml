@@ -1,13 +1,9 @@
-# 2시간마다 시세·뉴스·신규 세트를 조금씩 모아서 GitHub Pages에 배포
-# (사이트에 부담을 주지 않도록 1.5초 간격으로 요청하고, 한 번에 8개 세트씩만 갱신 → 하루면 전체 한 바퀴)
+# 시세·뉴스·신규 세트를 모아서 GitHub Pages에 배포 (Actions 탭 → Run workflow로 직접 실행)
+# 자동 일정은 꺼 둠: 포케폴리오가 GitHub 서버의 접속을 차단(HTTP 403)해서 반복 요청하지 않도록
 name: 시세 수집 & 배포
 
 on:
-  schedule:
-    - cron: '17 */2 * * *'   # 2시간마다 (정각 혼잡을 피해 17분)
-  workflow_dispatch:         # Actions 탭에서 "Run workflow"로 바로 갱신
-  push:
-    branches: [main]
+  workflow_dispatch:         # Actions 탭에서 "Run workflow"로 직접 실행할 때만
 
 permissions:
   contents: read
