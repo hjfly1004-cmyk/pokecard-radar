@@ -230,7 +230,7 @@ function priceTile(c, rank) {
 // ---- 등급(레어도)·상태 필터 ----
 const RARITY_ORDER = ['MUR', 'BWR', 'FUR', 'RGB', '복각', '마스터볼', '몬스터볼', 'UR', 'SAR', 'SSR', 'CSR', 'HR', 'SR', 'CHR', 'AR', 'ACE', 'MA', 'S', 'RRR', 'RR', 'R', 'PR', 'U', 'C'];
 // 30주년(30th CELEBRATION): 출처에서 UR로 묶인 카드를 실제 구분(FUR / RGB / 복각)으로 나눔
-const is30th = c => /30th/i.test(c.set || '') || /^M6A$/i.test(c.set || '');
+const is30th = c => /30th/i.test(c.set || '') || /^(M6A|30C)$/i.test(c.set || '');
 // 마스터볼·몬스터볼 미러: 포케폴리오에서 별도 카드(고유 ID)로 관리됨 → 미러 검색 결과로 ID 표를 만들어 표시
 const BALL_SETS = /151|테라스탈페스타/;
 let ballMap = {}, ballCards = { 마스터볼: [], 몬스터볼: [] };
@@ -247,6 +247,8 @@ function remapRarity(c, r) {
   r = (r || '').toUpperCase();
   if (!is30th(c)) return r;
   if (/FUR/i.test(c.name)) return 'FUR';
+  // 30주년에서 UR 등급인 신형 ex(소문자 ex: 뮤츠 ex·뮤 ex)는 FUR (일본판 134·135, 북미판 157·158)
+  if (r === 'UR' && /ex(\s|$)/.test(c.localName || c.name)) return 'FUR';
   if (r === 'RGB' || r === 'UNKNOWN') return 'RGB';
   if (r === 'UR') return '복각';
   return r;
