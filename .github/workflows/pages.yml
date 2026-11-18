@@ -1,9 +1,10 @@
-# 매일 아침 시세·뉴스·신규 세트를 모아서 GitHub Pages에 배포
+# 2시간마다 시세·뉴스·신규 세트를 조금씩 모아서 GitHub Pages에 배포
+# (사이트에 부담을 주지 않도록 1.5초 간격으로 요청하고, 한 번에 8개 세트씩만 갱신 → 하루면 전체 한 바퀴)
 name: 시세 수집 & 배포
 
 on:
   schedule:
-    - cron: '0 21 * * *'   # 매일 06:00 (한국 시간)
+    - cron: '17 */2 * * *'   # 2시간마다 (정각 혼잡을 피해 17분)
   workflow_dispatch:         # Actions 탭에서 "Run workflow"로 바로 갱신
   push:
     branches: [main]
@@ -26,7 +27,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # 제품 정보·세트 코드 등 오래 쓰는 캐시는 다음 실행 때 재사용
+      # 이전 실행에서 모은 세트 결과(cache/store)를 다음 실행 때 이어서 사용
       - uses: actions/cache@v4
         with:
           path: cache
@@ -34,6 +35,9 @@ jobs:
           restore-keys: pokecard-cache-
       - name: 데이터 수집
         run: node scripts/collect.js
+        env:
+          BATCH: '8'
+          THROTTLE_MS: '1500'
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

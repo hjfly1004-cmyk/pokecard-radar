@@ -353,6 +353,7 @@ async function priceBoard({ title, sub, q, hitsKey, grade, cond }) {
       const h = await sdata(`hits/${i}.json`);
       if (board.token !== token) return;
       board.data[ed] = (h && h[ed]) || [];
+      board.pending = !h || h.pending; // 아직 수집 전인 세트
       const tab = $(`#krBox .edtabs [data-ed="${ed}"] i`); if (tab) tab.textContent = board.data[ed].length;
       if (ed === board.ed) drawBoard(hitsKey);
       return;
@@ -426,6 +427,7 @@ function drawBoard(hitsKey) {
   const grid = $('#krGrid'); const list = board.data[board.ed];
   if (!list) { grid.innerHTML = Array(6).fill('<div class="skeleton"></div>').join(''); return; }
   rangeQueue.length = 0; grid.innerHTML = '';
+  if (!list.length && board.pending) { grid.innerHTML = `<div class="empty">⏳ 이 세트는 아직 수집 대기 중이에요.<br><small>사이트 부담을 줄이려고 2시간마다 8개 세트씩 차례로 모으고 있어요. 하루 안에 채워져요.</small></div>`; refreshGradeBar(); return; }
   if (!list.length) { grid.innerHTML = `<div class="empty">${EDS[board.ed].label} 시세 데이터가 없어요.${hitsKey && board.ed === "en" ? "<br>북미판은 세트 구성이 달라서, 카드 이름(예: 리자몽 ex)으로 검색하면 볼 수 있어요." : ""}</div>`; return; }
   // 시세 있는 카드(가격 높은 순)만 먼저 보여주고, 시세 없는 카드는 버튼으로 펼침 (RGB는 시세가 없어도 표시)
   const isRgb = c => remapRarity(c, c.rarity) === 'RGB';

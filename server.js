@@ -35,14 +35,36 @@ async function cached(key, ttlMs, fn) {
   return p;
 }
 
+// 사이트에 부담을 주지 않도록: 같은 사이트에는 THROTTLE_MS(기본 0, 수집기는 1500ms) 간격으로만 요청
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const lastHit = {};
+async function politeWait(url) {
+  const gap = +process.env.THROTTLE_MS || 0;
+  if (!gap) return;
+  const host = new URL(url).host;
+  const now = Date.now(), at = Math.max(now, (lastHit[host] || 0) + gap);
+  lastHit[host] = at;
+  if (at > now) await sleep(at - now);
+}
+class RateLimited extends Error {}
 async function get(url, opts = {}, timeoutMs = 20000) {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { ...opts, signal: ctrl.signal, headers: { 'User-Agent': UA, ...(opts.headers || {}) } });
-    if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
-    return res;
-  } finally { clearTimeout(timer); }
+  for (let attempt = 0; ; attempt++) {
+    await politeWait(url);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { ...opts, signal: ctrl.signal, headers: { 'User-Agent': UA, ...(opts.headers || {}) } });
+      if (res.status === 429) { // "요청이 너무 많음" → 알려준 시간(없으면 30초·60초…)만큼 쉬고 재시도, 3번 넘으면 중단
+        if (attempt >= 3) throw new RateLimited(`HTTP 429 ${url}`);
+        const wait = (+res.headers.get('retry-after') || 30 * (attempt + 1)) * 1000;
+        console.log(`  429 응답 → ${wait / 1000}초 쉬었다가 다시 시도`);
+        await sleep(wait);
+        continue;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
+      return res;
+    } finally { clearTimeout(timer); }
+  }
 }
 
 // ---------- Google 뉴스 RSS → JSON ----------
@@ -346,6 +368,7 @@ function send(res, code, body, type = 'application/json; charset=utf-8') {
 const PC = 'https://pokemoncard.co.kr';
 async function product(n) {
   return cached('prod:' + n, 24 * 3600 * 1000, async () => {
+    await politeWait(`${PC}/card/${n}`);
     const res = await fetch(`${PC}/card/${n}`, { headers: BROWSER_UA, redirect: 'manual' });
     if (res.status !== 200) return null;
     const html = await res.text();
@@ -401,7 +424,7 @@ async function enrichKr(list, n, all = false) {
       // 공식 한글판 이미지가 없던 카드 → 카드 번호로 공식 이미지 경로 생성 (없으면 앱에서 원본 사진으로 대체)
       const sc = SET_CODES[c.set];
       if (!c.img && sc && c.number) c.img = proxied(`${KR_IMG}${sc.series}/${sc.code}/${sc.code}_${c.number.split('/')[0]}.png?w=512`);
-    } catch {}
+    } catch (e) { if (e instanceof RateLimited) throw e; }
   }));
   return list;
 }
@@ -438,4 +461,4 @@ const server = http.createServer(async (req, res) => {
 
 // 직접 실행하면 서버 시작, 다른 스크립트(수집기)에서 불러오면 함수만 사용
 if (require.main === module) server.listen(PORT, () => console.log(`포켓카드 레이더 실행 중 → http://localhost:${PORT}`));
-module.exports = { pokepolio, enrichKr, learnSetCodes, ppRange, news, names, fxRates, products, ppHistoryRaw: id => ppHistory(id, "kr") };
+module.exports = { RateLimited, pokepolio, enrichKr, learnSetCodes, ppRange, news, names, fxRates, products, ppHistoryRaw: id => ppHistory(id, "kr") };
