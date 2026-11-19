@@ -426,7 +426,31 @@ async function enrichKr(list, n, all = false) {
       if (!c.img && sc && c.number) c.img = proxied(`${KR_IMG}${sc.series}/${sc.code}/${sc.code}_${c.number.split('/')[0]}.png?w=512`);
     } catch (e) { if (e instanceof RateLimited) throw e; }
   }));
+  await rgbImages(list);
   return list;
+}
+
+// 30주년 RGB 뮤(R/G/B 3장): 공식 한글판 이미지가 아직 없어서 같은 카드의 일본판 사진(snkrdunk)을 라벨과 함께 사용
+const SNK_IMG = id => proxied(`https://cdn.snkrdunk.com/upload_bg_removed/${id}.webp?size=m`);
+const RGB_IMG = {
+  R: SNK_IMG('398db73b-e8f1-49e7-9746-c5eec62c2a41'), // SNK-898625 (빨강)
+  G: SNK_IMG('0346cf90-9fcc-4f0f-a0d7-7d0667f57808'), // SNK-898626 (초록)
+  B: SNK_IMG('afaea0fb-7e50-439a-9cfb-a35a70e8dcf2'), // SNK-898627 (파랑)
+};
+async function rgbImages(list) {
+  await Promise.all(list.filter(c => !c.img && !c.imgAlt && /30th/i.test(c.set || '') && c.name === '뮤').map(async c => {
+    try {
+      // 카드 번호는 바뀌지 않으므로 7일 캐시 (시세 캐시와 별도)
+      const cardNo = await cached(`cardno2:${c.id}`, 7 * 24 * 3600 * 1000, () => ppLimit(async () => {
+        const html = await (await get(`https://www.pokepolio.com/cards/${c.id}`, { headers: BROWSER_UA }, 25000)).text();
+        return pick(html, /번호 <!-- -->([^<]{1,15})</) || '';
+      }));
+      const m = cardNo.match(/^([RGB])\/RGB$/);
+      if (!m) return;
+      c.number = cardNo; c.rarity = 'RGB';
+      c.imgAlt = RGB_IMG[m[1]]; c.imgAltLabel = '일본판 이미지';
+    } catch (e) { if (e instanceof RateLimited) throw e; }
+  }));
 }
 
 const server = http.createServer(async (req, res) => {
