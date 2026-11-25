@@ -161,3 +161,6 @@ dialog::backdrop { background: rgba(0,0,0,.5); }
 .prod-info .chip { align-self: flex-start; }
 @media (max-width: 480px) { .prodgrid { grid-template-columns: repeat(2, 1fr); gap: 10px; } }
 .brand .updated { font-size: 11px; font-weight: 500; opacity: .85; margin-left: 4px; }
+
+/* 네이버 쇼핑 판매가 안내 */
+.nvnote { grid-column: 1 / -1; font-size: 13px; color: var(--muted, #667); background: var(--chip, rgba(3,199,90,.08)); border-left: 3px solid #03c75a; padding: 8px 10px; border-radius: 8px; }

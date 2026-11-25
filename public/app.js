@@ -27,6 +27,8 @@ async function json(url) {
 // ---------- 정적 모드 (GitHub Pages) ----------
 // 서버 없이 GitHub Actions가 미리 모아 둔 data/*.json 파일로 같은 기능을 제공
 let STATIC = false;
+// 한글판 시세를 네이버 쇼핑 실시간 판매가로: 웹(정적) 버전에서, 또는 PC에서 localStorage pcr:naverLocal=true일 때
+const useNaver = () => !!window.Naver?.enabled && (STATIC || store.get('naverLocal', false));
 const SD = {};
 const sdata = name => (SD[name] ??= fetch('data/' + name).then(r => (r.ok ? r.json() : null)).catch(() => null));
 const normQ = s => (s || '').replace(/\s/g, '').toLowerCase();
@@ -85,6 +87,7 @@ async function loadNames() {
     ko2en = await json('/api/names');
     for (const [k, v] of Object.entries(ko2en)) en2ko[v] = k;
     enNamesByLen = Object.keys(en2ko).sort((a, b) => b.length - a.length);
+    window.Naver?.setNames(Object.keys(ko2en));
   } catch {}
 }
 function toEnglish(q) {
@@ -230,7 +233,7 @@ function priceTile(c, rank) {
 // ---- 등급(레어도)·상태 필터 ----
 const RARITY_ORDER = ['MUR', 'BWR', 'FUR', 'RGB', '복각', '마스터볼', '몬스터볼', 'UR', 'SAR', 'SSR', 'CSR', 'HR', 'SR', 'CHR', 'AR', 'ACE', 'MA', 'S', 'RRR', 'RR', 'R', 'PR', 'U', 'C'];
 // 30주년(30th CELEBRATION): 출처에서 UR로 묶인 카드를 실제 구분(FUR / RGB / 복각)으로 나눔
-const is30th = c => /30th/i.test(c.set || '') || /^(M6A|30C)$/i.test(c.set || '');
+const is30th = c => /30th|30주년/i.test(c.set || '') || /^(M6A|30C)$/i.test(c.set || '');
 // 마스터볼·몬스터볼 미러: 포케폴리오에서 별도 카드(고유 ID)로 관리됨 → 미러 검색 결과로 ID 표를 만들어 표시
 const BALL_SETS = /151|테라스탈페스타/;
 let ballMap = {}, ballCards = { 마스터볼: [], 몬스터볼: [] };
@@ -300,6 +303,14 @@ const rangeQueue = []; let rangeActive = 0;
 function loadRange(c, el) {
   rangeQueue.push(async () => {
     const box = el.querySelector('.range'), note = el.querySelector('.range-note');
+    if (c.nv) { // 네이버 쇼핑: 판매 글 가격 범위를 바로 표시
+      const r = c.nv;
+      el.querySelector('.price').insertAdjacentHTML('afterend', `<div class="meta">판매가 중앙값${r.malls?.length ? ' · ' + esc(r.malls.join(', ')) : ''}</div>`);
+      box.classList.remove('loading');
+      box.innerHTML = `<div class="lo"><span>최저</span><b>${fmtKRW(r.low)}</b></div><div class="hi"><span>최고</span><b>${fmtKRW(r.high)}</b></div>`;
+      note.textContent = `네이버 쇼핑 판매 글 ${r.count}건 · 실시간`;
+      return;
+    }
     try {
       const r = await json(`/api/kr-range?id=${c.id}&ed=${c.ed || 'kr'}&cond=${encodeURIComponent(condOf(c))}`);
       if (r.rarity && !el.dataset.rarity) {
@@ -350,6 +361,15 @@ async function priceBoard({ title, sub, q, hitsKey, grade, cond }) {
   // enrich=false: 목록을 먼저 빠르게 표시 → enrich=true: 한글판 등급·공식 이미지를 채워서 다시 그림
   const load = async (ed, enrich = false) => {
     let list = [];
+    if (ed === 'kr' && useNaver()) { // 한글판: 네이버 쇼핑 실시간 판매가 (판매 글을 카드별로 묶음)
+      try { list = hitsKey ? await Naver.setCards(HIT_SETS.find(h => h.q === hitsKey)) : await Naver.searchCards(q, grade); }
+      catch { list = []; board.naverError = true; }
+      if (board.token !== token) return;
+      board.data.kr = list; board.naver = true;
+      const tab = $(`#krBox .edtabs [data-ed="kr"] i`); if (tab) tab.textContent = list.length;
+      if (board.ed === 'kr') drawBoard(hitsKey);
+      return;
+    }
     if (STATIC && hitsKey) { // 정적 모드: 수집기가 미리 처리해 둔 세트별 힛카드 파일
       const i = HIT_SETS.findIndex(h => h.q === hitsKey);
       const h = await sdata(`hits/${i}.json`);
@@ -429,6 +449,10 @@ function drawBoard(hitsKey) {
   const grid = $('#krGrid'); const list = board.data[board.ed];
   if (!list) { grid.innerHTML = Array(6).fill('<div class="skeleton"></div>').join(''); return; }
   rangeQueue.length = 0; grid.innerHTML = '';
+  if (board.ed === 'kr' && board.naver) {
+    if (!list.length) { grid.innerHTML = `<div class="empty">${board.naverError ? '네이버 쇼핑 시세를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.' : '네이버 쇼핑에서 카드 판매 글을 찾지 못했어요.'}</div>`; refreshGradeBar(); return; }
+    grid.insertAdjacentHTML('beforeend', '<div class="nvnote">🛒 한글판은 <b>네이버 쇼핑 실시간 판매가</b>예요. 판매 글 가격의 중앙값이라 실제 거래가보다 조금 높을 수 있어요.</div>');
+  }
   if (!list.length && board.pending) { grid.innerHTML = `<div class="empty">⏳ 이 세트는 아직 수집 대기 중이에요.<br><small>사이트 부담을 줄이려고 2시간마다 8개 세트씩 차례로 모으고 있어요. 하루 안에 채워져요.</small></div>`; refreshGradeBar(); return; }
   if (!list.length) { grid.innerHTML = `<div class="empty">${EDS[board.ed].label} 시세 데이터가 없어요.${hitsKey && board.ed === "en" ? "<br>북미판은 세트 구성이 달라서, 카드 이름(예: 리자몽 ex)으로 검색하면 볼 수 있어요." : ""}</div>`; return; }
   // 시세 있는 카드(가격 높은 순)만 먼저 보여주고, 시세 없는 카드는 버튼으로 펼침 (RGB는 시세가 없어도 표시)
@@ -457,7 +481,7 @@ async function krPazone(q, token) {
   } catch {}
 }
 function krSearch(q, grade, cond) {
-  return priceBoard({ title: `💰 "${esc(q)}"${grade ? ' ' + esc(grade) : ''}${cond ? ' ' + esc(cond) : ''} 시세`, sub: '(포케폴리오 실거래 · MVC 네이버카페 등)', q, grade, cond });
+  return priceBoard({ title: `💰 "${esc(q)}"${grade ? ' ' + esc(grade) : ''}${cond ? ' ' + esc(cond) : ''} 시세`, sub: useNaver() ? '(한글판: 네이버 쇼핑 실시간 판매가)' : '(포케폴리오 실거래 · MVC 네이버카페 등)', q, grade, cond });
 }
 // 검색어에서 등급(SAR·마스터볼 등)과 감정 등급(PSA10 등)을 분리: "리자몽 ex SAR" → 이름 "리자몽 ex" + 등급 SAR
 function parseGradeQuery(q) {
@@ -581,7 +605,13 @@ async function checkWatch(manual) {
   for (const w of watch) {
     try {
       let now;
-      if (w.kr) {
+      if (w.kr?.source === 'naver') { // 네이버 쇼핑 판매가로 등록한 카드
+        if (!useNaver()) continue;
+        const list = await Naver.searchCards(`${w.kr.name}${w.kr.set && w.kr.set !== '네이버 쇼핑' ? ' ' + w.kr.set : ''}`, w.kr.rarity || null);
+        const hit = list.find(x => x.name === w.kr.name && x.rarity === w.kr.rarity);
+        if (!hit) continue;
+        now = hit.price; w.kr = { ...w.kr, price: hit.price, nv: hit.nv };
+      } else if (w.kr) {
         const list = await json(`/api/pp?q=${encodeURIComponent(w.query)}&ed=${w.ed || 'kr'}`);
         const hit = list.find(x => watchId(x) === w.id);
         if (!hit) continue;

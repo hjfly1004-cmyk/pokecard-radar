@@ -1,0 +1,7 @@
+name = "pokecard-naver"
+main = "naver-proxy.js"
+compatibility_date = "2025-01-01"
+
+# 비밀값은 아래 명령으로 직접 입력 (이 파일에 키를 적지 마세요)
+#   npx wrangler secret put NAVER_ID
+#   npx wrangler secret put NAVER_SECRET
